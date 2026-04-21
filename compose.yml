@@ -5,9 +5,9 @@ services:
     environment:
       - 'POSTGRES_DB=insight'
       # Matches your spring.datasource.username
-      - 'POSTGRES_USER=Root@12345'
+      - 'POSTGRES_USER=root'
       # Matches your spring.datasource.password
-      - 'POSTGRES_PASSWORD=root'
+      - 'POSTGRES_PASSWORD=Root@12345'
     labels:
       # This allows Spring Boot to auto-configure the connection
       # if the spring-boot-docker-compose dependency is present
@@ -17,7 +17,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U Root@12345 -d insight"]
+      test: ["CMD-SHELL", "pg_isready -U root -d insight"]
       interval: 10s
       timeout: 5s
       retries: 5

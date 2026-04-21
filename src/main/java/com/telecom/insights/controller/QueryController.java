@@ -1,23 +1,31 @@
 package com.telecom.insights.controller;
+
+import com.telecom.insights.agents.NLQAgent;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
 @RestController
 @RequestMapping("/insights")
-@Tag(name = "Insights API", description = "AI Query APIs")
+@Tag(name = "Telecom Insights API")
 public class QueryController {
 
-    @Autowired
-    ChatClient chatClient;
+    private final NLQAgent nlqAgent;
 
-    @Operation(summary = "Ask AI Question")
-    @GetMapping("/ask")
-    public String askanyQuestiontoSwetha(@RequestParam String msg) {
-        return chatClient.prompt().user(msg).call().content();
+    public QueryController(NLQAgent nlqAgent) {
+        this.nlqAgent = nlqAgent;
+    }
+
+    @GetMapping("/health")
+    @Operation(summary = "Health Check")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("Application Running");
+    }
+
+    @GetMapping("/nlq")
+    @Operation(summary = "Ask Gemini")
+    public ResponseEntity<String> ask(@RequestParam String msg) {
+        return ResponseEntity.ok(nlqAgent.processQuery(msg));
     }
 }
