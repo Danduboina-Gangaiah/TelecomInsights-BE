@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+@CrossOrigin("http://localhost:5173/")
 
 @RestController
 @RequestMapping("/insights")
@@ -25,7 +26,7 @@ public class QueryController {
 
     @GetMapping("/nlq")
     @Operation(summary = "Ask Gemini")
-    public ResponseEntity<String> ask(@RequestParam String msg) {
-        return ResponseEntity.ok(nlqAgent.processQuery(msg));
+    public ResponseEntity<String> ask(@RequestParam String message) {
+        return ResponseEntity.ok(nlqAgent.processQuery(message));
     }
 }
