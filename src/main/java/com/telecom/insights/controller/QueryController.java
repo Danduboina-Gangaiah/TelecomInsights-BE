@@ -1,10 +1,16 @@
 package com.telecom.insights.controller;
 
 import com.telecom.insights.agents.NLQAgent;
+import com.telecom.insights.model.QueryLog;
+import com.telecom.insights.repository.QueryLogRepository;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/insights")
@@ -12,9 +18,12 @@ import org.springframework.web.bind.annotation.*;
 public class QueryController {
 
     private final NLQAgent nlqAgent;
+    private final QueryLogRepository queryLogRepository;
 
-    public QueryController(NLQAgent nlqAgent) {
+    public QueryController(NLQAgent nlqAgent,
+                           QueryLogRepository queryLogRepository) {
         this.nlqAgent = nlqAgent;
+        this.queryLogRepository = queryLogRepository;
     }
 
     @GetMapping("/health")
@@ -24,8 +33,28 @@ public class QueryController {
     }
 
     @GetMapping("/nlq")
-    @Operation(summary = "Ask Gemini")
+    @Operation(summary = "Ask Gemini with Cache")
     public ResponseEntity<String> ask(@RequestParam String msg) {
-        return ResponseEntity.ok(nlqAgent.processQuery(msg));
+
+
+        String normalized = msg.trim().toLowerCase();
+
+
+        Optional<QueryLog> existing =
+                queryLogRepository.findByQuestion(normalized);
+
+        if (existing.isPresent()) {
+            System.out.println("⚡ CACHE HIT");
+            return ResponseEntity.ok(existing.get().getResponse());
+        }
+
+
+        System.out.println("🤖 CALLING GEMINI");
+        String response = nlqAgent.processQuery(msg);
+
+        QueryLog log = new QueryLog(normalized, response);
+        queryLogRepository.save(log);
+        
+        return ResponseEntity.ok(response);
     }
 }

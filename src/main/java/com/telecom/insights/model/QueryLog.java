@@ -1,17 +1,18 @@
 package com.telecom.insights.model;
 
 import jakarta.persistence.*;
-
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "query_logs")
 public class QueryLog {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(columnDefinition = "TEXT")
+    // unique question for caching
+    @Column(unique = true, columnDefinition = "TEXT")
     private String question;
 
     @Column(columnDefinition = "TEXT")
@@ -19,17 +20,30 @@ public class QueryLog {
 
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    // Default constructor for Hibernate
+    // Default constructor
     public QueryLog() {}
 
     public QueryLog(String question, String response) {
         this.question = question;
         this.response = response;
+        this.createdAt = LocalDateTime.now();
     }
 
-    // JACKSON NEEDS THESE TO SEE THE DATA:
+    // GETTERS
     public Long getId() { return id; }
+
     public String getQuestion() { return question; }
+
     public String getResponse() { return response; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    // SETTERS
+    public void setQuestion(String question) {
+        this.question = question;
+    }
+
+    public void setResponse(String response) {
+        this.response = response;
+    }
 }
