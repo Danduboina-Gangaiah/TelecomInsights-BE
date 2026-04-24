@@ -7,6 +7,9 @@ import com.telecom.insights.repository.QueryLogRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +19,9 @@ import java.util.Optional;
 @RequestMapping("/insights")
 @Tag(name = "Telecom Insights API")
 public class QueryController {
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(QueryController.class);
 
     private final NLQAgent nlqAgent;
     private final QueryLogRepository queryLogRepository;
@@ -36,25 +42,25 @@ public class QueryController {
     @Operation(summary = "Ask Gemini with Cache")
     public ResponseEntity<String> ask(@RequestParam String msg) {
 
-
         String normalized = msg.trim().toLowerCase();
-
 
         Optional<QueryLog> existing =
                 queryLogRepository.findByQuestion(normalized);
 
         if (existing.isPresent()) {
-            System.out.println("⚡ CACHE HIT");
+            logger.info("CACHE HIT for query: {}", normalized);
             return ResponseEntity.ok(existing.get().getResponse());
         }
 
+        logger.info("Calling Gemini for new query: {}", normalized);
 
-        System.out.println("🤖 CALLING GEMINI");
         String response = nlqAgent.processQuery(msg);
 
         QueryLog log = new QueryLog(normalized, response);
         queryLogRepository.save(log);
-        
+
+        logger.info("Response cached successfully for query: {}", normalized);
+
         return ResponseEntity.ok(response);
     }
 }
