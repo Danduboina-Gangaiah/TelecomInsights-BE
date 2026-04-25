@@ -1,105 +1,71 @@
-package com.telecom.insights.agents;
+package com.telecom.insights.agent;
 
+import com.telecom.insights.model.QueryLog;
+import com.telecom.insights.repository.QueryLogRepository;
+import com.telecom.insights.repository.SafeSqlExecutor;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class NLQAgent {
-
     private final ChatClient chatClient;
-    private final JdbcTemplate jdbcTemplate;
+    private final VectorStore vectorStore;
+    private final SafeSqlExecutor sqlExecutor;
+    private final QueryLogRepository logRepository;
 
-    public NLQAgent(ChatClient.Builder builder,
-                    JdbcTemplate jdbcTemplate) {
+    public NLQAgent(ChatClient.Builder builder, VectorStore vectorStore,
+                    SafeSqlExecutor sqlExecutor, QueryLogRepository logRepository){
         this.chatClient = builder.build();
-        this.jdbcTemplate = jdbcTemplate;
+        this.vectorStore = vectorStore;
+        this.sqlExecutor = sqlExecutor;
+        this.logRepository = logRepository;
     }
 
-    public String processQuery(String question) {
-        try {
-            String q = question.toLowerCase();
-            String sql = "";
+    public Map<String,Object> processQuestion(String question){
+        long start = System.currentTimeMillis();
 
-            if (q.contains("highest latency")) {
-                sql = """
-                        SELECT region, latency
-                        FROM network_metrics
-                        ORDER BY latency DESC
-                        LIMIT 1
-                        """;
-                return jdbcTemplate.queryForList(sql).toString();
-            }
+        List<Document> docs = vectorStore.similaritySearch(
+                SearchRequest.builder().query(question).topK(3).build());
 
-            if (q.contains("lowest latency")) {
-                sql = """
-                        SELECT region, latency
-                        FROM network_metrics
-                        ORDER BY latency ASC
-                        LIMIT 1
-                        """;
-                return jdbcTemplate.queryForList(sql).toString();
-            }
+        String context = docs.stream().map(Document::getText).collect(Collectors.joining("\n"));
 
-            if (q.contains("download")) {
-                sql = """
-                        SELECT region, download_speed
-                        FROM network_metrics
-                        ORDER BY download_speed DESC
-                        LIMIT 1
-                        """;
-                return jdbcTemplate.queryForList(sql).toString();
-            }
+        String sql = chatClient.prompt()
+                .system(s -> s.text("""
+You are a PostgreSQL expert.
+Use ONLY SELECT queries.
+Use ONLY schema columns provided.
+Never use DELETE UPDATE INSERT DROP ALTER.
+Return SQL only.
+Schema Context:
+{ctx}
+""").param("ctx", context))
+                .user(question)
+                .call().content().replace("```sql","").replace("```","").trim();
 
-            if (q.contains("upload")) {
-                sql = """
-                        SELECT region, upload_speed
-                        FROM network_metrics
-                        ORDER BY upload_speed DESC
-                        LIMIT 1
-                        """;
-                return jdbcTemplate.queryForList(sql).toString();
-            }
+        List<Map<String,Object>> rows = sqlExecutor.executeReadOnlyQuery(sql);
 
-            if (q.contains("best signal")) {
-                sql = """
-                        SELECT region, signal_strength
-                        FROM network_metrics
-                        ORDER BY signal_strength DESC
-                        LIMIT 1
-                        """;
-                return jdbcTemplate.queryForList(sql).toString();
-            }
+        String answer = chatClient.prompt()
+                .user("Question: "+question+"\nData: "+rows+"\nWrite concise business answer.")
+                .call().content();
 
-            if (q.contains("weak signal")) {
-                sql = """
-                        SELECT region, signal_strength
-                        FROM network_metrics
-                        ORDER BY signal_strength ASC
-                        LIMIT 1
-                        """;
-                return jdbcTemplate.queryForList(sql).toString();
-            }
+        long ms = System.currentTimeMillis()-start;
 
-            if (q.contains("dropped")) {
-                sql = """
-                        SELECT region, COUNT(*) AS dropped_count
-                        FROM network_metrics
-                        WHERE dropped_connection = true
-                        GROUP BY region
-                        ORDER BY dropped_count DESC
-                        LIMIT 1
-                        """;
-                return jdbcTemplate.queryForList(sql).toString();
-            }
+        logRepository.save(new QueryLog(question, answer));
 
-            return "No matching query found.";
-
-        } catch (Exception e) {
-            return "Error: " + e.getMessage();
-        }
+        Map<String,Object> out = new LinkedHashMap<>();
+        out.put("question", question);
+        out.put("queryType", "NLQ");
+        out.put("answer", answer);
+        out.put("generatedSql", sql);
+        out.put("rawData", rows);
+        out.put("status", "SUCCESS");
+        out.put("executionMs", ms);
+        return out;
     }
 }

@@ -21,36 +21,23 @@ public class SchemaMetadataIngestor {
         this.vectorStore = vectorStore;
     }
 
-    //@EventListener(ApplicationReadyEvent.class)
+    @EventListener(ApplicationReadyEvent.class)
     public void ingestSchemaMetadata() {
         logger.info("Initializing 5G Schema Metadata in Vector Store...");
 
         // The "Brain" of your RAG - providing schema, regions, and the 2024 time constraint.
-        String networkDataSchema = """
-            Table: network_metrics
-            Description: Comprehensive performance metrics for the 5G network. 
-            
-            DATA RELEVANCE CONSTRAINTS:
-            - ALL DATA IS FROM JUNE 2024. 
-            - If a user asks for 'today', 'this month', or 'current data', you MUST query for JUNE 2024.
-            
-            AVAILABLE REGIONS (Values in 'region_id' column): 
-            Mumbai, Kolkata, New York, Delhi, Chennai, Tokyo, San Francisco, Berlin.
-            
-            Columns:
-            - timestamp (TIMESTAMP): Recorded time (Data exists only for 2024-06).
-            - region_id (VARCHAR): City name. Use ONLY from the AVAILABLE REGIONS list.
-            - cell_id (VARCHAR): Tower/Device identifier.
-            - avg_latency_ms (NUMERIC): Network delay.
-            - download_speed_mbps (NUMERIC): Downlink speed.
-            - upload_speed_mbps (NUMERIC): Uplink speed.
-            - packet_loss_pct (NUMERIC): Packet loss. Use as primary metric for 'CHURN' or 'STABILITY'.
-            - active_users (INTEGER): User count.
-            
-            FALLBACK RULE:
-            If a user asks for a region NOT in the list (e.g., Andhra Pradesh), return a SQL query that selects the missing status:
-            SELECT 'Region not found. Please choose from: Mumbai, Kolkata, New York, Delhi, Chennai, Tokyo, San Francisco, Berlin' AS status;
-            """;
+        String networkDataSchema= """
+Table: network_metrics
+Columns:
+region_id, cell_id, avg_latency_ms, download_speed_mbps,
+upload_speed_mbps, packet_loss_pct, active_users, timestamp
+Known regions: Mumbai, Kolkata, New York, Delhi, Chennai, Tokyo, Berlin, San Francisco.
+Business meanings:
+low packet loss = stability
+high active_users = traffic load
+high latency = poor performance
+""";
+
 
         Document schemaDoc = new Document(networkDataSchema, Map.of(
                 "type", "schema",
