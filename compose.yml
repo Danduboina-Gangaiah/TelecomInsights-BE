@@ -1,26 +1,11 @@
 services:
   pgvector:
     image: 'pgvector/pgvector:pg16'
-    container_name: telecom-insights-db
     environment:
-      - 'POSTGRES_DB=insight'
-      # Matches your spring.datasource.username
-      - 'POSTGRES_USER=Root@12345'
-      # Matches your spring.datasource.password
-      - 'POSTGRES_PASSWORD=root'
+      - 'POSTGRES_DB=insightsDb'
+      - 'POSTGRES_PASSWORD=Root@12345'
+      - 'POSTGRES_USER=root'
     labels:
-      # This allows Spring Boot to auto-configure the connection
-      # if the spring-boot-docker-compose dependency is present
       - "org.springframework.boot.service-connection=postgres"
     ports:
       - '5432:5432'
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U Root@12345 -d insight"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  pgdata:

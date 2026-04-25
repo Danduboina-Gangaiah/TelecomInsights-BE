@@ -1,0 +1,78 @@
+<html>
+<head>
+<title>DatabaseCheckConfig.java</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #cf8e6d;}
+.s1 { color: #bcbec4;}
+.s2 { color: #bcbec4;}
+.s3 { color: #6aab73;}
+.s4 { color: #7a7e85;}
+</style>
+</head>
+<body bgcolor="#191a1c">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+DatabaseCheckConfig.java</font>
+</center></td></tr></table>
+<pre><span class="s0">package </span><span class="s1">com</span><span class="s2">.</span><span class="s1">telecom</span><span class="s2">.</span><span class="s1">insights</span><span class="s2">.</span><span class="s1">config</span><span class="s2">;</span>
+
+<span class="s0">import </span><span class="s1">org</span><span class="s2">.</span><span class="s1">slf4j</span><span class="s2">.</span><span class="s1">Logger</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">org</span><span class="s2">.</span><span class="s1">slf4j</span><span class="s2">.</span><span class="s1">LoggerFactory</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">org</span><span class="s2">.</span><span class="s1">springframework</span><span class="s2">.</span><span class="s1">boot</span><span class="s2">.</span><span class="s1">ApplicationArguments</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">org</span><span class="s2">.</span><span class="s1">springframework</span><span class="s2">.</span><span class="s1">boot</span><span class="s2">.</span><span class="s1">ApplicationRunner</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">org</span><span class="s2">.</span><span class="s1">springframework</span><span class="s2">.</span><span class="s1">stereotype</span><span class="s2">.</span><span class="s1">Component</span><span class="s2">;</span>
+
+<span class="s0">import </span><span class="s1">javax</span><span class="s2">.</span><span class="s1">sql</span><span class="s2">.</span><span class="s1">DataSource</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">java</span><span class="s2">.</span><span class="s1">sql</span><span class="s2">.</span><span class="s1">Connection</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">java</span><span class="s2">.</span><span class="s1">sql</span><span class="s2">.</span><span class="s1">DatabaseMetaData</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">java</span><span class="s2">.</span><span class="s1">sql</span><span class="s2">.</span><span class="s1">ResultSet</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">java</span><span class="s2">.</span><span class="s1">util</span><span class="s2">.</span><span class="s1">ArrayList</span><span class="s2">;</span>
+<span class="s0">import </span><span class="s1">java</span><span class="s2">.</span><span class="s1">util</span><span class="s2">.</span><span class="s1">List</span><span class="s2">;</span>
+
+<span class="s1">@Component</span>
+<span class="s0">public class </span><span class="s1">DatabaseCheckConfig </span><span class="s0">implements </span><span class="s1">ApplicationRunner </span><span class="s2">{</span>
+
+    <span class="s0">private static final </span><span class="s1">Logger logger </span><span class="s2">= </span><span class="s1">LoggerFactory</span><span class="s2">.</span><span class="s1">getLogger</span><span class="s2">(</span><span class="s1">DatabaseCheckConfig</span><span class="s2">.</span><span class="s0">class</span><span class="s2">);</span>
+    <span class="s0">private final </span><span class="s1">DataSource dataSource</span><span class="s2">;</span>
+
+    <span class="s0">public </span><span class="s1">DatabaseCheckConfig</span><span class="s2">(</span><span class="s1">DataSource dataSource</span><span class="s2">) {</span>
+        <span class="s0">this</span><span class="s2">.</span><span class="s1">dataSource </span><span class="s2">= </span><span class="s1">dataSource</span><span class="s2">;</span>
+    <span class="s2">}</span>
+
+    <span class="s1">@Override</span>
+    <span class="s0">public void </span><span class="s1">run</span><span class="s2">(</span><span class="s1">ApplicationArguments args</span><span class="s2">) {</span>
+        <span class="s1">logger</span><span class="s2">.</span><span class="s1">info</span><span class="s2">(</span><span class="s3">&quot;---------------------------------------------------------&quot;</span><span class="s2">);</span>
+        <span class="s1">logger</span><span class="s2">.</span><span class="s1">info</span><span class="s2">(</span><span class="s3">&quot;Checking Database Connection &amp; Schema...&quot;</span><span class="s2">);</span>
+
+        <span class="s0">try </span><span class="s2">(</span><span class="s1">Connection connection </span><span class="s2">= </span><span class="s1">dataSource</span><span class="s2">.</span><span class="s1">getConnection</span><span class="s2">()) {</span>
+            <span class="s4">// For Postgres, getCatalog() is often the DB name</span>
+            <span class="s1">String dbName </span><span class="s2">= </span><span class="s1">connection</span><span class="s2">.</span><span class="s1">getCatalog</span><span class="s2">();</span>
+            <span class="s1">String productName </span><span class="s2">= </span><span class="s1">connection</span><span class="s2">.</span><span class="s1">getMetaData</span><span class="s2">().</span><span class="s1">getDatabaseProductName</span><span class="s2">();</span>
+
+            <span class="s1">logger</span><span class="s2">.</span><span class="s1">info</span><span class="s2">(</span><span class="s3">&quot;Successfully connected to Database: {}&quot;</span><span class="s2">, </span><span class="s1">dbName</span><span class="s2">);</span>
+            <span class="s1">logger</span><span class="s2">.</span><span class="s1">info</span><span class="s2">(</span><span class="s3">&quot;Database Product: {}&quot;</span><span class="s2">, </span><span class="s1">productName</span><span class="s2">);</span>
+
+            <span class="s1">DatabaseMetaData metaData </span><span class="s2">= </span><span class="s1">connection</span><span class="s2">.</span><span class="s1">getMetaData</span><span class="s2">();</span>
+            <span class="s4">// Use &quot;public&quot; for PostgreSQL default schema</span>
+            <span class="s0">try </span><span class="s2">(</span><span class="s1">ResultSet tables </span><span class="s2">= </span><span class="s1">metaData</span><span class="s2">.</span><span class="s1">getTables</span><span class="s2">(</span><span class="s0">null</span><span class="s2">, </span><span class="s3">&quot;public&quot;</span><span class="s2">, </span><span class="s3">&quot;%&quot;</span><span class="s2">, </span><span class="s0">new </span><span class="s1">String</span><span class="s2">[]{</span><span class="s3">&quot;TABLE&quot;</span><span class="s2">})) {</span>
+                <span class="s1">List</span><span class="s2">&lt;</span><span class="s1">String</span><span class="s2">&gt; </span><span class="s1">tableNames </span><span class="s2">= </span><span class="s0">new </span><span class="s1">ArrayList</span><span class="s2">&lt;&gt;();</span>
+                <span class="s0">while </span><span class="s2">(</span><span class="s1">tables</span><span class="s2">.</span><span class="s1">next</span><span class="s2">()) {</span>
+                    <span class="s1">tableNames</span><span class="s2">.</span><span class="s1">add</span><span class="s2">(</span><span class="s1">tables</span><span class="s2">.</span><span class="s1">getString</span><span class="s2">(</span><span class="s3">&quot;TABLE_NAME&quot;</span><span class="s2">));</span>
+                <span class="s2">}</span>
+
+                <span class="s0">if </span><span class="s2">(</span><span class="s1">tableNames</span><span class="s2">.</span><span class="s1">isEmpty</span><span class="s2">()) {</span>
+                    <span class="s1">logger</span><span class="s2">.</span><span class="s1">warn</span><span class="s2">(</span><span class="s3">&quot;0 tables currently present in the 'public' schema.&quot;</span><span class="s2">);</span>
+                <span class="s2">} </span><span class="s0">else </span><span class="s2">{</span>
+                    <span class="s1">logger</span><span class="s2">.</span><span class="s1">info</span><span class="s2">(</span><span class="s3">&quot;Tables found ({}): {}&quot;</span><span class="s2">, </span><span class="s1">tableNames</span><span class="s2">.</span><span class="s1">size</span><span class="s2">(), </span><span class="s1">String</span><span class="s2">.</span><span class="s1">join</span><span class="s2">(</span><span class="s3">&quot;, &quot;</span><span class="s2">, </span><span class="s1">tableNames</span><span class="s2">));</span>
+                <span class="s2">}</span>
+            <span class="s2">}</span>
+        <span class="s2">} </span><span class="s0">catch </span><span class="s2">(</span><span class="s1">Exception e</span><span class="s2">) {</span>
+            <span class="s1">logger</span><span class="s2">.</span><span class="s1">error</span><span class="s2">(</span><span class="s3">&quot;CRITICAL: Failed to connect to the database on startup!&quot;</span><span class="s2">, </span><span class="s1">e</span><span class="s2">);</span>
+        <span class="s2">}</span>
+        <span class="s1">logger</span><span class="s2">.</span><span class="s1">info</span><span class="s2">(</span><span class="s3">&quot;---------------------------------------------------------&quot;</span><span class="s2">);</span>
+    <span class="s2">}</span>
+<span class="s2">}</span></pre>
+</body>
+</html>
