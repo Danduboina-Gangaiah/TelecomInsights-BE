@@ -3,55 +3,59 @@ package com.telecom.insights.agent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.telecom.insights.model.QueryLog;
 import com.telecom.insights.repository.QueryLogRepository;
-import com.telecom.insights.repository.SafeSqlExecutor;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class NLQAgent {
 
     private final ChatClient chatClient;
-    private final VectorStore vectorStore;
-    private final SafeSqlExecutor sqlExecutor;
+    private final JdbcTemplate jdbcTemplate;
     private final QueryLogRepository logRepository;
     private final ObjectMapper objectMapper;
+    private final VectorStore vectorStore;
 
     public NLQAgent(
             ChatClient.Builder builder,
-            VectorStore vectorStore,
-            SafeSqlExecutor sqlExecutor,
+            JdbcTemplate jdbcTemplate,
             QueryLogRepository logRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            VectorStore vectorStore
     ) {
 
         this.chatClient = builder.build();
-        this.vectorStore = vectorStore;
-        this.sqlExecutor = sqlExecutor;
+        this.jdbcTemplate = jdbcTemplate;
         this.logRepository = logRepository;
         this.objectMapper = objectMapper;
+        this.vectorStore = vectorStore;
     }
 
     public Map<String, Object> processQuestion(String question) {
 
+        long start = System.currentTimeMillis();
+
         try {
 
-            String normalized =
-                    question.trim().toLowerCase();
+            // =====================================================
+            // NORMALIZE QUESTION
+            // =====================================================
+
+            String normalizedQuestion =
+                    question.toLowerCase().trim();
 
             // =====================================================
-            // DB CACHE CHECK
+            // CACHE CHECK
             // =====================================================
 
             Optional<QueryLog> cached =
-                    logRepository.findByQuestion(normalized);
+                    logRepository.findByQuestion(normalizedQuestion);
 
             if (cached.isPresent()) {
 
@@ -66,109 +70,217 @@ public class NLQAgent {
                 return cachedMap;
             }
 
-            long start = System.currentTimeMillis();
-
             // =====================================================
             // VECTOR SEARCH
             // =====================================================
 
             List<Document> docs =
-                    vectorStore.similaritySearch(
-                            SearchRequest.builder()
-                                    .query(question)
-                                    .topK(3)
-                                    .build()
-                    );
+                    vectorStore.similaritySearch(question);
 
             String context =
                     docs.stream()
                             .map(Document::getText)
-                            .collect(Collectors.joining("\n"));
+                            .reduce("", (a, b) -> a + "\n" + b);
 
             // =====================================================
-            // LLM SQL GENERATION
+            // SQL GENERATION PROMPT
             // =====================================================
 
-            String sql = chatClient.prompt()
+            String prompt = """
+You are an expert PostgreSQL Telecom Analytics AI.
 
-                    .system(s -> s.text("""
-You are a PostgreSQL telecom expert.
+Your task:
+Convert telecom business questions into VALID PostgreSQL SQL.
+
+STRICT RULES:
+
+1. Use ONLY this table:
+refined_network_metrics
+
+2. Use ONLY existing columns from schema context
+
+3. NEVER invent columns
+
+4. Return ONLY executable PostgreSQL SQL
+
+5. NO markdown
+6. NO explanations
+7. NO comments
+8. NO ```sql
+
+9. ALWAYS use LIMIT when asking:
+best/top/highest/fastest
+
+10. If question asks:
+- best/highest/fastest → use DESC
+- worst/lowest/slowest → use ASC
+
+11. If aggregation is used:
+ALWAYS include GROUP BY
+
+12. NEVER generate incomplete WHERE clauses
+
+13. NEVER use columns not present in schema
+
+14. If no matching column exists:
+return:
+SELECT 'INVALID_QUERY' AS error;
+
+Schema:
+%s
+
+Question:
+%s
+""".formatted(context, question);
+
+            String generatedSql =
+                    chatClient.prompt(prompt)
+                            .call()
+                            .content();
+
+            // =====================================================
+            // CLEAN SQL
+            // =====================================================
+
+            generatedSql =
+                    generatedSql
+                            .replace("```sql", "")
+                            .replace("```", "")
+                            .trim();
+
+            System.out.println("=================================");
+            System.out.println("GENERATED SQL:");
+            System.out.println(generatedSql);
+            System.out.println("=================================");
+
+            // =====================================================
+            // SQL VALIDATION
+            // =====================================================
+
+            String lowerSql =
+                    generatedSql.toLowerCase();
+
+            if (!lowerSql.contains("select")) {
+
+                return Map.of(
+                        "status", "FAILED",
+                        "source", "NLQ_AGENT",
+                        "reason", "Invalid SQL generated"
+                );
+            }
+
+            if (lowerSql.endsWith("=")
+                    || lowerSql.endsWith("where")
+                    || lowerSql.endsWith("group by")
+                    || lowerSql.endsWith("order by")) {
+
+                return Map.of(
+                        "status", "FAILED",
+                        "source", "NLQ_AGENT",
+                        "reason", "Incomplete SQL generated"
+                );
+            }
+
+            if (generatedSql.contains("INVALID_QUERY")) {
+
+                return Map.of(
+                        "status", "FAILED",
+                        "source", "NLQ_AGENT",
+                        "reason", "Question not supported by dataset schema"
+                );
+            }
+
+            // =====================================================
+            // EXECUTE SQL
+            // =====================================================
+
+            List<Map<String, Object>> results =
+                    jdbcTemplate.queryForList(generatedSql);
+
+            System.out.println("TOTAL ROWS: " + results.size());
+
+            // =====================================================
+            // EMPTY RESULTS
+            // =====================================================
+
+            if (results.isEmpty()) {
+
+                return Map.of(
+                        "status", "FAILED",
+                        "source", "NLQ_AGENT",
+                        "reason", "No matching telecom data found"
+                );
+            }
+
+            // =====================================================
+            // ANSWER GENERATION
+            // =====================================================
+
+            String answerPrompt = """
+You are a Telecom Analytics AI Assistant.
+
+Generate a clean natural language answer.
 
 RULES:
-- Use ONLY SELECT queries
-- Never use DELETE UPDATE INSERT DROP ALTER
-- Return SQL only
+- Be concise
+- Use business language
+- Mention key findings
+- Mention best/worst performers if available
+- Do NOT mention SQL
+- Do NOT mention databases
+- Directly answer the user question
 
-Schema Context:
-{ctx}
-""").param("ctx", context))
-
-                    .user(question)
-                    .call()
-                    .content()
-                    .replace("```sql", "")
-                    .replace("```", "")
-                    .trim();
-
-            // =====================================================
-            // SQL EXECUTION
-            // =====================================================
-
-            List<Map<String, Object>> rows =
-                    sqlExecutor.executeReadOnlyQuery(sql);
-
-            // =====================================================
-            // BUSINESS RESPONSE
-            // =====================================================
-
-            String answer = chatClient.prompt()
-
-                    .user("""
 Question:
 %s
 
-Data:
+Results:
 %s
+""".formatted(question, results);
 
-Write concise telecom business insights.
-""".formatted(question, rows))
+            String finalAnswer =
+                    chatClient.prompt(answerPrompt)
+                            .call()
+                            .content();
 
-                    .call()
-                    .content();
+            // =====================================================
+            // EXECUTION TIME
+            // =====================================================
 
-            long ms =
+            long executionMs =
                     System.currentTimeMillis() - start;
 
             // =====================================================
             // FINAL RESPONSE
             // =====================================================
 
-            Map<String, Object> out =
+            Map<String, Object> response =
                     new LinkedHashMap<>();
 
-            out.put("question", question);
-            out.put("queryType", "NLQ");
-            out.put("generatedSql", sql);
-            out.put("rawData", rows);
-            out.put("answer", answer);
-            out.put("status", "SUCCESS");
-            out.put("executionMs", ms);
-            out.put("source", "LLM");
+            response.put("question", question);
+            response.put("queryType", "NLQ");
+            response.put("generatedSql", generatedSql);
+            response.put("rawData", results);
+            response.put("answer", finalAnswer);
+            response.put("status", "SUCCESS");
+            response.put("executionMs", executionMs);
+            response.put("source", "NLQ_AGENT");
 
             // =====================================================
-            // SAVE FULL RESPONSE TO DB
+            // SAVE CACHE
             // =====================================================
 
             String json =
-                    objectMapper.writeValueAsString(out);
+                    objectMapper.writeValueAsString(response);
 
             logRepository.save(
-                    new QueryLog(normalized, json)
+                    new QueryLog(normalizedQuestion, json)
             );
 
-            return out;
+            return response;
 
         } catch (Exception e) {
+
+            e.printStackTrace();
 
             return Map.of(
                     "status", "FAILED",

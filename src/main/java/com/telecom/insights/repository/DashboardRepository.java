@@ -42,7 +42,8 @@ public class DashboardRepository {
         String sql = """
             SELECT
                 hour_of_day,
-                ROUND(AVG(network_utilization_pct), 2) AS utilization
+                ROUND(AVG(download_speed_mbps), 2) AS download_speed_mbps,
+                ROUND(AVG(avg_latency_ms), 2) AS avg_latency_ms
             FROM refined_network_metrics
             GROUP BY hour_of_day
             ORDER BY hour_of_day
@@ -115,12 +116,12 @@ public class DashboardRepository {
 
         String sql = """
             SELECT
-                carrier,
-                ROUND(AVG(dropped_calls), 2) AS avg_dropped_calls,
-                ROUND(AVG(download_speed_mbps), 2) AS avg_download
+                carrier AS region,
+                ROUND(AVG(download_speed_mbps), 2) AS download_speed_mbps
             FROM refined_network_metrics
             GROUP BY carrier
-            ORDER BY avg_download DESC
+            ORDER BY download_speed_mbps DESC
+            LIMIT 5
         """;
 
         return jdbcTemplate.queryForList(sql);

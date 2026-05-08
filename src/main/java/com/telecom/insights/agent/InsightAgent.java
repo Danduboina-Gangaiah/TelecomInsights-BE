@@ -28,14 +28,14 @@ public class InsightAgent {
     }
 
     public Map<String, Object> generateInsights(
-            String context,
+            String question,
             List<Map<String, Object>> queryResults
     ) {
 
         try {
 
             String cacheKey =
-                    "insight_" + context.toLowerCase();
+                    "insight_" + question.toLowerCase();
 
             // =====================================================
             // CACHE CHECK
@@ -58,32 +58,51 @@ public class InsightAgent {
             }
 
             // =====================================================
-            // INSIGHT PROMPT
+            // EMPTY CHECK
             // =====================================================
 
-            String insightPrompt = """
-You are an enterprise telecom Insights Agent.
+            if (queryResults == null || queryResults.isEmpty()) {
 
-Your task:
-- Analyze the provided structured data
-- Identify trends and deviations
-- Highlight best and worst regions
-- Suggest root causes
-- Provide executive-level narration
+                return Map.of(
+                        "status", "FAILED",
+                        "source", "INSIGHT_AGENT",
+                        "reason", "No insight data found"
+                );
+            }
+
+            // =====================================================
+            // LLM PROMPT
+            // =====================================================
+
+            String prompt = """
+You are a Telecom Executive Insights AI.
+
+Analyze the telecom KPI dataset and provide:
+
+1. Key observations
+2. Best performing regions/carriers
+3. Worst performing regions/carriers
+4. Latency trends
+5. Download/upload performance
+6. Packet loss issues
+7. Business recommendations
 
 IMPORTANT:
+- Use professional telecom business language
+- Keep response concise
 - Do NOT generate SQL
-- Use business language
+- Do NOT mention JSON
+- Do NOT mention raw database values repeatedly
 
-Analysis Context:
+Question:
 %s
 
-Structured Data:
+Dataset:
 %s
-""".formatted(context, queryResults);
+""".formatted(question, queryResults);
 
             String insights =
-                    chatClient.prompt(insightPrompt)
+                    chatClient.prompt(prompt)
                             .call()
                             .content();
 
@@ -94,10 +113,10 @@ Structured Data:
             Map<String, Object> out =
                     new LinkedHashMap<>();
 
-            out.put("source", "LLM");
             out.put("status", "SUCCESS");
+            out.put("source", "INSIGHT AGENT");
+            out.put("question", question);
             out.put("insights", insights);
-            out.put("input_data", queryResults);
 
             // =====================================================
             // SAVE CACHE
@@ -115,8 +134,8 @@ Structured Data:
         } catch (Exception e) {
 
             return Map.of(
-                    "source", "INSIGHT_AGENT",
                     "status", "FAILED",
+                    "source", "INSIGHT_AGENT",
                     "reason", e.getMessage()
             );
         }
