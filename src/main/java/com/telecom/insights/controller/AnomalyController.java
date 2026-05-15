@@ -4,13 +4,21 @@ import com.telecom.insights.agent.AnomalyAgent;
 import com.telecom.insights.repository.AnomalyAlertRepository;
 
 import org.springframework.http.ResponseEntity;
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
 @RestController
+<<<<<<< Updated upstream
 @RequestMapping("/anomaly")
+=======
+@RequestMapping("/api/v1/anomaly")
+>>>>>>> Stashed changes
 @CrossOrigin(origins = "*")
 public class AnomalyController {
 
@@ -24,6 +32,10 @@ public class AnomalyController {
     ) {
 
         this.anomalyAgent = anomalyAgent;
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
         this.alertRepository = alertRepository;
     }
 
@@ -34,7 +46,12 @@ public class AnomalyController {
     @GetMapping("/check")
     public ResponseEntity<?> runManualCheck() {
 
+<<<<<<< Updated upstream
         String result = anomalyAgent.runManualCheck();
+=======
+        String result =
+                anomalyAgent.runManualCheck();
+>>>>>>> Stashed changes
 
         return ResponseEntity.ok(
                 Map.of(
@@ -45,15 +62,24 @@ public class AnomalyController {
     }
 
     // =====================================================
+<<<<<<< Updated upstream
     // GET UNREAD ALERTS
     // =====================================================
 
     @GetMapping("/alerts")
     public ResponseEntity<List<Map<String, Object>>> getUnreadAlerts() {
+=======
+    // FETCH GENERATED ALERTS
+    // =====================================================
+
+    @GetMapping("/alerts")
+    public ResponseEntity<List<Map<String, Object>>> getAlerts() {
+>>>>>>> Stashed changes
 
         return ResponseEntity.ok(
                 alertRepository.getUnreadAlerts()
         );
+<<<<<<< Updated upstream
     }
 
     // =====================================================
@@ -74,5 +100,7 @@ public class AnomalyController {
                         "alertId", id
                 )
         );
+=======
+>>>>>>> Stashed changes
     }
 }

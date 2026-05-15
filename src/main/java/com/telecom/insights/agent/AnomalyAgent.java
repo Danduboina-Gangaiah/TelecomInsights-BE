@@ -35,7 +35,11 @@ public class AnomalyAgent {
 
     private final ObjectMapper objectMapper;
 
+<<<<<<< Updated upstream
     @Value("${anomaly.agent.suppression-hours:0}")
+=======
+    @Value("${anomaly.agent.suppression-hours:4}")
+>>>>>>> Stashed changes
     private int suppressionHours;
 
     @Value("${anomaly.agent.threshold.quality-score:0.40}")
@@ -90,7 +94,12 @@ RAW DATA:
 
     @Scheduled(
             fixedRateString =
+<<<<<<< Updated upstream
                     "${anomaly.agent.polling-rate:10000}")
+=======
+                    "${anomaly.agent.polling-rate:900000}"
+    )
+>>>>>>> Stashed changes
     public void monitorNetworkHealth() {
 
         logger.info("Anomaly Agent Started...");

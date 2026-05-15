@@ -114,6 +114,7 @@ CREATE TABLE anomaly_alerts (
 
                                 message TEXT,
 
+<<<<<<< Updated upstream
                                 raw_data JSON
                                     B,
 
@@ -136,3 +137,10 @@ FROM anomaly_alerts;
 SELECT * FROM refined_network_metrics
 ORDER BY timestamp DESC
 LIMIT 10;
+=======
+                                raw_data JSONB,
+
+                                is_read BOOLEAN DEFAULT FALSE
+
+);
+>>>>>>> Stashed changes
