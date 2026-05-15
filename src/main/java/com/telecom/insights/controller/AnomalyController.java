@@ -1,39 +1,78 @@
 package com.telecom.insights.controller;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import com.telecom.insights.agent.AnomalyAgent;
+import com.telecom.insights.repository.AnomalyAlertRepository;
 
-import java.util.*;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/anomaly")
+@CrossOrigin(origins = "*")
 public class AnomalyController {
 
+    private final AnomalyAgent anomalyAgent;
+
+    private final AnomalyAlertRepository alertRepository;
+
+    public AnomalyController(
+            AnomalyAgent anomalyAgent,
+            AnomalyAlertRepository alertRepository
+    ) {
+
+        this.anomalyAgent = anomalyAgent;
+        this.alertRepository = alertRepository;
+    }
+
+    // =====================================================
+    // MANUAL ANOMALY SCAN
+    // =====================================================
+
     @GetMapping("/check")
-    public Map<String, Object> checkAnomaly() {
+    public ResponseEntity<?> runManualCheck() {
 
-        Map<String, Object> response =
-                new LinkedHashMap<>();
+        String result = anomalyAgent.runManualCheck();
 
-        response.put("source", "ANOMALY_AGENT");
-        response.put("status", "SUCCESS");
-        response.put("anomalyCount", 1);
+        return ResponseEntity.ok(
+                Map.of(
+                        "status", "SUCCESS",
+                        "message", result
+                )
+        );
+    }
 
-        List<Map<String, Object>> anomalies =
-                new ArrayList<>();
+    // =====================================================
+    // GET UNREAD ALERTS
+    // =====================================================
 
-        Map<String, Object> anomaly =
-                new LinkedHashMap<>();
+    @GetMapping("/alerts")
+    public ResponseEntity<List<Map<String, Object>>> getUnreadAlerts() {
 
-        anomaly.put("region", "Chicago");
-        anomaly.put("severity", "HIGH");
-        anomaly.put("issue", "Latency Spike");
+        return ResponseEntity.ok(
+                alertRepository.getUnreadAlerts()
+        );
+    }
 
-        anomalies.add(anomaly);
+    // =====================================================
+    // MARK ALERT AS READ
+    // =====================================================
 
-        response.put("anomalies", anomalies);
+    @PutMapping("/alerts/{id}/read")
+    public ResponseEntity<Map<String, Object>> markAlertAsRead(
+            @PathVariable Long id
+    ) {
 
-        return response;
+        alertRepository.markAsRead(id);
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "status", "SUCCESS",
+                        "message", "Alert marked as read",
+                        "alertId", id
+                )
+        );
     }
 }

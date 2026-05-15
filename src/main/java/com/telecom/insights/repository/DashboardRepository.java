@@ -116,7 +116,7 @@ public class DashboardRepository {
 
         String sql = """
             SELECT
-                carrier AS region,
+                carrier,
                 ROUND(AVG(download_speed_mbps), 2) AS download_speed_mbps
             FROM refined_network_metrics
             GROUP BY carrier

@@ -20,8 +20,11 @@ import java.util.Map;
 @Service
 public class OrchestratorService {
 
+
     private static final Logger logger =
-            LoggerFactory.getLogger(OrchestratorService.class);
+            LoggerFactory.getLogger(
+                    OrchestratorService.class
+            );
 
     // =====================================================
     // VECTOR STORE
@@ -34,34 +37,198 @@ public class OrchestratorService {
     // =====================================================
 
     private final NLQAgent nlqAgent;
+
     private final InsightAgent insightAgent;
+
     private final AnomalyAgent anomalyAgent;
 
     private final GuardrailResponseHandler guardrail;
 
     // =====================================================
-    // SEMANTIC THRESHOLD
+    // THRESHOLD
     // =====================================================
 
     private static final double THRESHOLD = 0.45;
 
+    // =====================================================
+    // CONSTRUCTOR
+    // =====================================================
+
     public OrchestratorService(
+
             EmbeddingModel embeddingModel,
+
             NLQAgent nlqAgent,
+
             InsightAgent insightAgent,
+
             AnomalyAgent anomalyAgent,
+
             GuardrailResponseHandler guardrail
     ) {
 
         this.vectorStore =
-                SimpleVectorStore.builder(embeddingModel).build();
+                SimpleVectorStore.builder(
+                        embeddingModel
+                ).build();
 
         this.nlqAgent = nlqAgent;
+
         this.insightAgent = insightAgent;
+
         this.anomalyAgent = anomalyAgent;
+
         this.guardrail = guardrail;
 
         initializeSemanticRoutes();
+    }
+
+    // =====================================================
+    // DOMAIN VALIDATION
+    // =====================================================
+
+    private boolean isTelecomIntent(
+            String question
+    ) {
+
+        String q =
+                question.toLowerCase();
+
+        return
+
+                q.contains("latency")
+
+                        || q.contains("download")
+
+                        || q.contains("upload")
+
+                        || q.contains("packet")
+
+                        || q.contains("carrier")
+
+                        || q.contains("network")
+
+                        || q.contains("5g")
+
+                        || q.contains("telecom")
+
+                        || q.contains("signal")
+
+                        || q.contains("region")
+
+                        || q.contains("city")
+
+                        || q.contains("device")
+
+                        || q.contains("speed")
+
+                        || q.contains("quality")
+
+                        || q.contains("congestion")
+
+                        || q.contains("drop")
+
+                        || q.contains("iphone")
+
+                        || q.contains("galaxy")
+
+                        || q.contains("pixel")
+
+                        || q.contains("nord")
+
+                        || q.contains("verizon")
+
+                        || q.contains("at&t")
+
+                        || q.contains("bsnl")
+
+                        || q.contains("vi")
+
+                        || q.contains("network_band")
+
+                        || q.contains("packet loss")
+
+                        || q.contains("active users")
+
+                        || q.contains("quality score")
+
+                        || q.contains("telecom analytics");
+    }
+
+    // =====================================================
+    // INTENT CLASSIFIER
+    // =====================================================
+
+    private AgentType classifyIntent(
+            String question
+    ) {
+
+        String q =
+                question.toLowerCase();
+
+        // =====================================================
+        // INSIGHT QUESTIONS
+        // =====================================================
+
+        if (
+
+                q.contains("why")
+
+                        || q.contains("explain")
+
+                        || q.contains("analyze")
+
+                        || q.contains("analysis")
+
+                        || q.contains("trend")
+
+                        || q.contains("root cause")
+
+                        || q.contains("reason")
+
+                        || q.contains("insight")
+
+                        || q.contains("summary")
+
+                        || q.contains("recommendation")
+
+                        || q.contains("performing better")
+
+                        || q.contains("performance issue")
+
+                        || q.contains("degradation")
+        ) {
+
+            return AgentType.INSIGHT_AGENT;
+        }
+
+        // =====================================================
+        // ANOMALY QUESTIONS
+        // =====================================================
+
+        if (
+
+                q.contains("anomaly")
+
+                        || q.contains("abnormal")
+
+                        || q.contains("outage")
+
+                        || q.contains("spike")
+
+                        || q.contains("failure")
+
+                        || q.contains("suspicious")
+        ) {
+
+            return AgentType.ANOMALY_AGENT;
+        }
+
+        // =====================================================
+        // DEFAULT → NLQ
+        // =====================================================
+
+        return AgentType.NLQ_AGENT;
     }
 
     // =====================================================
@@ -70,147 +237,41 @@ public class OrchestratorService {
 
     private void initializeSemanticRoutes() {
 
-        logger.info("Initializing semantic vector routes...");
+        logger.info(
+                "Initializing telecom semantic routes..."
+        );
 
         List<Document> routes = List.of(
 
-                // =====================================================
-                // NLQ AGENT
-                // =====================================================
-
                 new Document(
                         """
-                        show telecom data
-                        show telecom metrics
-                        show KPI data
+                        telecom KPI metrics
                         telecom statistics
-                        network statistics
-                        telecom dashboard
-                        average latency
-                        average packet loss
-                        average download speed
-                        average upload speed
                         compare download speed
                         compare upload speed
-                        compare telecom metrics
-                        compare carriers
-                        compare cities
-                        compare regions
-                        compare states
-                        show top telecom regions
-                        show best carrier
-                        show highest download speed
-                        show network utilization
-                        show dropped calls
-                        show signal strength
-                        show quality score
-                        telecom query
-                        telecom report
-                        network report
-                        city with best speed
-                        carrier with best latency
-                        which city has highest download speed
-                        which region has best upload speed
-                        show average telecom metrics
-                        compare network performance
-                        best telecom region
-                        top telecom carrier
-                        telecom analytics query
-                        """,
-                        Map.of(
-                                "agent",
-                                AgentType.NLQ_AGENT.name()
-                        )
-                ),
-
-                // =====================================================
-                // INSIGHT AGENT
-                // =====================================================
-
-                new Document(
-                        """
-                        why network quality is poor
-                        why latency is high
-                        why packet loss is increasing
-                        why telecom performance is degrading
-                        explain telecom issues
-                        explain network issues
-                        explain telecom trends
-                        analyze telecom trends
-                        analyze network trends
-                        analyze network quality
-                        generate telecom insights
-                        provide business insights
-                        telecom executive insights
-                        telecom strategic insights
-                        telecom recommendations
-                        suggest network improvements
-                        root cause analysis
-                        telecom optimization recommendations
-                        analyze congestion impact
-                        analyze dropped calls
-                        explain poor telecom regions
-                        explain bad network quality
-                        why some regions perform poorly
-                        why network performance differs
-                        carrier performance analysis
-                        business summary
-                        operational insights
-                        analyze telecom behavior
-                        explain telecom performance
-                        why some carriers perform better
-                        analyze regional telecom issues
-                        suggest telecom optimizations
-                        explain network degradation
-                        why download speed is low
-                        """,
-                        Map.of(
-                                "agent",
-                                AgentType.INSIGHT_AGENT.name()
-                        )
-                ),
-
-                // =====================================================
-                // ANOMALY AGENT
-                // =====================================================
-
-                new Document(
-                        """
-                        detect anomalies
+                        compare latency
+                        packet loss metrics
+                        network utilization
+                        telecom performance metrics
+                        carrier analytics
+                        region analytics
+                        device analytics
+                        network analytics
+                        telecom trends
                         anomaly detection
-                        telecom anomaly
-                        network anomaly
-                        abnormal behavior
-                        abnormal latency
-                        abnormal packet loss
-                        suspicious telecom activity
-                        unusual network activity
-                        detect telecom problems
-                        network outage
-                        telecom outage
-                        telecom failure
-                        critical latency
-                        abnormal utilization
-                        anomaly report
-                        detect network spikes
-                        unusual packet loss
-                        identify telecom anomalies
-                        abnormal telecom metrics
-                        suspicious latency spikes
-                        abnormal download speed
-                        network instability
-                        detect telecom failure
                         """,
                         Map.of(
-                                "agent",
-                                AgentType.ANOMALY_AGENT.name()
+                                "domain",
+                                "telecom"
                         )
                 )
         );
 
         vectorStore.add(routes);
 
-        logger.info("Semantic vector routes initialized successfully");
+        logger.info(
+                "Telecom semantic routes initialized successfully."
+        );
     }
 
     // =====================================================
@@ -221,14 +282,28 @@ public class OrchestratorService {
 
         try {
 
-            // =====================================================
-            // NORMALIZE QUESTION
-            // =====================================================
-
             question =
-                    question.toLowerCase().trim();
+                    question.trim();
 
-            logger.info("Routing Question: {}", question);
+            logger.info(
+                    "Routing Question: {}",
+                    question
+            );
+
+            // =====================================================
+            // DOMAIN VALIDATION
+            // =====================================================
+
+            if (!isTelecomIntent(question)) {
+
+                logger.warn(
+                        "Rejected non telecom query"
+                );
+
+                return guardrail.handleOffTopic(
+                        question
+                );
+            }
 
             // =====================================================
             // VECTOR SEARCH
@@ -236,43 +311,47 @@ public class OrchestratorService {
 
             List<Document> matches =
                     vectorStore.similaritySearch(
+
                             SearchRequest.builder()
+
                                     .query(question)
+
                                     .topK(1)
-                                    .similarityThreshold(THRESHOLD)
+
+                                    .similarityThreshold(
+                                            THRESHOLD
+                                    )
+
                                     .build()
                     );
 
             // =====================================================
-            // GUARDRAIL
+            // SEMANTIC GUARDRAIL
             // =====================================================
 
-            if (matches == null || matches.isEmpty()) {
+            if (matches == null
+                    || matches.isEmpty()) {
 
-                logger.warn("Guardrail triggered");
+                logger.warn(
+                        "Semantic Guardrail Triggered"
+                );
 
-                return guardrail.handleOffTopic(question);
+                return guardrail.handleOffTopic(
+                        question
+                );
             }
 
             // =====================================================
-            // MATCHED AGENT
+            // CLASSIFY INTENT
             // =====================================================
 
-            Document bestMatch =
-                    matches.get(0);
-
-            String matchedAgent =
-                    (String) bestMatch
-                            .getMetadata()
-                            .get("agent");
+            AgentType agentType =
+                    classifyIntent(question);
 
             logger.info(
-                    "Semantic Match Agent: {}",
-                    matchedAgent
+                    "Classified Agent: {}",
+                    agentType
             );
-
-            AgentType agentType =
-                    AgentType.valueOf(matchedAgent);
 
             // =====================================================
             // ROUTING
@@ -281,67 +360,105 @@ public class OrchestratorService {
             return switch (agentType) {
 
                 // =====================================================
-                // NLQ AGENT
+                // NLQ
                 // =====================================================
 
                 case NLQ_AGENT -> {
 
-                    logger.info("Routing → NLQ Agent");
+                    logger.info(
+                            "Routing → NLQ_AGENT"
+                    );
 
-                    yield nlqAgent.processQuestion(question);
+                    yield nlqAgent.processQuestion(
+                            question
+                    );
                 }
 
                 // =====================================================
-                // INSIGHT AGENT
+                // INSIGHT
                 // =====================================================
 
                 case INSIGHT_AGENT -> {
 
-                    logger.info("Routing → Insight Agent");
+                    logger.info(
+                            "Routing → INSIGHT_AGENT"
+                    );
+
+                    // =============================================
+                    // SUPPORTING ANALYTICS QUERY
+                    // =============================================
+
+                    String supportingQuestion =
+                            """
+                            Give telecom performance metrics including
+                            download speed,
+                            upload speed,
+                            latency,
+                            packet loss,
+                            congestion level,
+                            and network utilization
+                            related to:
+                            """
+                                    + question;
 
                     Map<String, Object> analyticsData =
                             nlqAgent.processQuestion(
-                                    "show average latency, average packet loss, average quality score, average download speed, average upload speed by region"
+                                    supportingQuestion
                             );
 
                     if (analyticsData == null) {
 
                         yield Map.of(
                                 "status", "FAILED",
-                                "source", "INSIGHT_AGENT",
-                                "reason", "Failed to fetch telecom analytics"
+
+                                "source",
+                                "INSIGHT_AGENT",
+
+                                "reason",
+                                "Failed to fetch telecom analytics"
                         );
                     }
 
                     Object rawData =
-                            analyticsData.get("rawData");
+                            analyticsData.get(
+                                    "rawData"
+                            );
 
                     if (!(rawData instanceof List<?> rawList)
                             || rawList.isEmpty()) {
 
                         yield Map.of(
                                 "status", "FAILED",
-                                "source", "INSIGHT_AGENT",
-                                "reason", "No telecom insight data available"
+
+                                "source",
+                                "INSIGHT_AGENT",
+
+                                "reason",
+                                "No telecom insight data available"
                         );
                     }
 
                     List<Map<String, Object>> data =
-                            (List<Map<String, Object>>) rawData;
+                            (List<Map<String, Object>>)
+                                    rawData;
 
                     yield insightAgent.generateInsights(
+
                             question,
+
                             data
                     );
                 }
 
                 // =====================================================
-                // ANOMALY AGENT
+                // ANOMALY
                 // =====================================================
 
                 case ANOMALY_AGENT -> {
 
-                    logger.info("Routing → Anomaly Agent");
+                    logger.info(
+                            "Routing → ANOMALY_AGENT"
+                    );
 
                     yield anomalyAgent.runManualCheck();
                 }
@@ -350,7 +467,9 @@ public class OrchestratorService {
                 // DEFAULT
                 // =====================================================
 
-                default -> guardrail.handleOffTopic(question);
+                default -> guardrail.handleOffTopic(
+                        question
+                );
             };
 
         } catch (Exception e) {
@@ -361,9 +480,13 @@ public class OrchestratorService {
             );
 
             return Map.of(
+
                     "status", "FAILED",
+
                     "source", "ORCHESTRATOR",
-                    "reason", e.getMessage()
+
+                    "reason",
+                    "Unable to process telecom request"
             );
         }
     }
