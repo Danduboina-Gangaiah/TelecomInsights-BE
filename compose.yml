@@ -1,11 +1,26 @@
+version: '3.8'
+
 services:
   pgvector:
-    image: 'pgvector/pgvector:pg16'
+    image: pgvector/pgvector:pg16
+    container_name: telecom-insights-db
+
     environment:
-      - 'POSTGRES_DB=insightsDb'
-      - 'POSTGRES_PASSWORD=Root@12345'
-      - 'POSTGRES_USER=root'
-    labels:
-      - "org.springframework.boot.service-connection=postgres"
+      POSTGRES_DB: insightsDb
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: Root@12345
+
     ports:
-      - '5432:5432'
+      - "5433:5432"
+
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d insightsDb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

@@ -10,11 +10,13 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
 
 @SpringBootApplication
+@EnableScheduling
 public class InsightsApplication implements ApplicationRunner {
 
 	private static final Logger logger =
@@ -42,22 +44,14 @@ public class InsightsApplication implements ApplicationRunner {
 
 		try (Connection connection = dataSource.getConnection()) {
 
-			String dbName = connection.getCatalog();
-
-			logger.info("Successfully connected to Database: {}", dbName);
-
-			logger.info("Database Product: {}",
-					connection.getMetaData().getDatabaseProductName());
+			logger.info("Successfully connected to Database: {}", connection.getCatalog());
+			logger.info("Database Product: {}", connection.getMetaData().getDatabaseProductName());
 
 			logger.info("Application started successfully.");
-			logger.info("Base URL: http://localhost:9021/api/v1/insights");
+			logger.info("Base URL: http://localhost:9021/insights");
 
 		} catch (Exception e) {
-
-			logger.error(
-					"CRITICAL: Failed to connect to the database on startup!",
-					e
-			);
+			logger.error("CRITICAL: Failed to connect to the database!", e);
 		}
 	}
 }

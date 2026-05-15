@@ -1,152 +1,308 @@
 package com.telecom.insights.rag;
 
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVParser;
-import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.io.Resource;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
+
+import java.sql.Timestamp;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
-public class DatasetIngestor {
+public class DatasetIngestor implements CommandLineRunner {
 
-    private static final Logger logger =
+    private static final Logger log =
             LoggerFactory.getLogger(DatasetIngestor.class);
 
-    private final JdbcClient jdbcClient;
+    private final JdbcTemplate jdbcTemplate;
 
-    @Value("classpath:data/5g_network_data.csv")
+    @Value("classpath:data/refined_network_metrics.csv")
     private Resource csvFile;
 
-    public DatasetIngestor(JdbcClient jdbcClient) {
-        this.jdbcClient = jdbcClient;
+    public DatasetIngestor(
+            JdbcTemplate jdbcTemplate
+    ) {
+        this.jdbcTemplate = jdbcTemplate;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
-    @Transactional
-    public void loadDataOnStartup() {
+    @Override
+    public void run(String... args) throws Exception {
 
-        createTableIfNotExists();
+        log.info("CHECKING EXISTING DATA...");
 
-        Long count = jdbcClient
-                .sql("SELECT COUNT(*) FROM network_metrics")
-                .query(Long.class)
-                .single();
+        Integer existingCount =
+                jdbcTemplate.queryForObject(
 
-        if (count > 0) {
-            logger.info("Database already contains {} records. Skipping CSV ingestion.", count);
+                        "SELECT COUNT(*) FROM refined_network_metrics",
+
+                        Integer.class
+                );
+
+        // =====================================================
+        // SKIP IF DATA ALREADY EXISTS
+        // =====================================================
+
+        if (existingCount != null && existingCount > 0) {
+
+            log.info("=================================");
+            log.info("DATA ALREADY EXISTS IN DATABASE");
+            log.info("SKIPPING INGESTION");
+            log.info("TOTAL ROWS : {}", existingCount);
+            log.info("=================================");
+
             return;
         }
 
-        logger.info("Starting CSV data ingestion into network_metrics...");
+        long start = System.currentTimeMillis();
 
-        try (
-                BufferedReader reader =
-                        new BufferedReader(
-                                new InputStreamReader(
-                                        csvFile.getInputStream(),
-                                        StandardCharsets.UTF_8));
+        log.info("STARTING TELECOM DATASET INGESTION...");
 
-                CSVParser csvParser =
-                        new CSVParser(
-                                reader,
-                                CSVFormat.DEFAULT
-                                        .withFirstRecordAsHeader()
-                                        .withIgnoreHeaderCase()
-                                        .withTrim())
-        ) {
+        BufferedReader br = new BufferedReader(
+                new InputStreamReader(
+                        csvFile.getInputStream()
+                )
+        );
 
-            for (CSVRecord record : csvParser) {
+        // Skip CSV Header
+        br.readLine();
 
-                try {
+        String sql = """
+                
+                INSERT INTO refined_network_metrics (
+                
+                    timestamp,
+                    city,
+                    signal_strength_dbm,
+                    download_speed_mbps,
+                    upload_speed_mbps,
+                    avg_latency_ms,
+                    jitter_ms,
+                    network_type,
+                    device_model,
+                    carrier,
+                    network_band,
+                    battery_level_pct,
+                    temperature_c,
+                    connected_duration_min,
+                    handover_count,
+                    data_usage_mb,
+                    video_streaming_quality,
+                    vonr_enabled,
+                    congestion_level,
+                    ping_to_google_ms,
+                    dropped_calls,
+                    hour_of_day,
+                    state,
+                    region,
+                    environment_type,
+                    active_users,
+                    packet_loss_pct,
+                    weather_condition,
+                    network_utilization_pct,
+                    quality_score,
+                    is_peak_hour
+                
+                )
+                
+                VALUES (
+                
+                    ?,?,?,?,?,?,?,?,?,?,
+                    ?,?,?,?,?,?,?,?,?,?,
+                    ?,?,?,?,?,?,?,?,?,?,
+                    ?
+                
+                )
+                """;
 
-                    jdbcClient.sql("""
-                        INSERT INTO network_metrics
-                        (
-                            "timestamp",
-                            region_id,
-                            cell_id,
-                            avg_latency_ms,
-                            download_speed_mbps,
-                            upload_speed_mbps,
-                            packet_loss_pct,
-                            active_users
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """)
-                            .params(
-                                    record.get("Timestamp"),
-                                    record.get("Location"),
-                                    record.get("Device Model"),
-                                    num(record.get("Latency (ms)")),
-                                    num(record.get("Download Speed (Mbps)")),
-                                    num(record.get("Upload Speed (Mbps)")),
-                                    num(record.get("Jitter (ms)")),
-                                    integer(record.get("Ping to Google (ms)"))
-                            )
-                            .update();
+        String line;
 
-                } catch (Exception e) {
-                    logger.warn(
-                            "Skipping bad row {} - Reason: {}",
-                            record.getRecordNumber(),
-                            e.getMessage()
+        int batchSize = 1000;
+
+        List<Object[]> batchArgs = new ArrayList<>();
+
+        int success = 0;
+        int failed = 0;
+
+        while ((line = br.readLine()) != null) {
+
+            try {
+
+                String[] data =
+                        line.split(
+                                ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"
+                        );
+
+                batchArgs.add(new Object[]{
+
+                        // 0
+                        Timestamp.valueOf(data[0]),
+
+                        // 1
+                        data[1],
+
+                        // 2
+                        Double.parseDouble(data[2]),
+
+                        // 3
+                        Double.parseDouble(data[3]),
+
+                        // 4
+                        Double.parseDouble(data[4]),
+
+                        // 5
+                        Double.parseDouble(data[5]),
+
+                        // 6
+                        Double.parseDouble(data[6]),
+
+                        // 7
+                        data[7],
+
+                        // 8
+                        data[8],
+
+                        // 9
+                        data[9],
+
+                        // 10
+                        data[10],
+
+                        // 11
+                        Double.parseDouble(data[11]),
+
+                        // 12
+                        Double.parseDouble(data[12]),
+
+                        // 13
+                        Double.parseDouble(data[13]),
+
+                        // 14
+                        Integer.parseInt(data[14]),
+
+                        // 15
+                        Double.parseDouble(data[15]),
+
+                        // 16
+                        data[16],
+
+                        // 17
+                        Boolean.parseBoolean(data[17]),
+
+                        // 18
+                        data[18],
+
+                        // 19
+                        Double.parseDouble(data[19]),
+
+                        // 20
+                        Integer.parseInt(data[20]),
+
+                        // 21
+                        Integer.parseInt(data[21]),
+
+                        // 22
+                        data[22],
+
+                        // 23
+                        data[23],
+
+                        // 24
+                        data[24],
+
+                        // 25
+                        Integer.parseInt(data[25]),
+
+                        // 26
+                        Double.parseDouble(data[26]),
+
+                        // 27
+                        data[27],
+
+                        // 28
+                        Double.parseDouble(data[28]),
+
+                        // 29
+                        Double.parseDouble(data[29]),
+
+                        // 30
+                        Boolean.parseBoolean(data[30])
+
+                });
+
+                // =====================================================
+                // BATCH INSERT
+                // =====================================================
+
+                if (batchArgs.size() >= batchSize) {
+
+                    jdbcTemplate.batchUpdate(
+                            sql,
+                            batchArgs
                     );
+
+                    success += batchArgs.size();
+
+                    log.info(
+                            "BATCH INSERTED : {} ROWS",
+                            success
+                    );
+
+                    batchArgs.clear();
                 }
+
+            } catch (Exception e) {
+
+                failed++;
+
+                log.error(
+                        "FAILED ROW : {}",
+                        line
+                );
+
+                log.error(
+                        "ERROR : {}",
+                        e.getMessage()
+                );
             }
-
-            logger.info("Successfully loaded data from CSV into PostgreSQL.");
-
-        } catch (Exception e) {
-            logger.error("Failed to load CSV data", e);
         }
-    }
 
-    private void createTableIfNotExists() {
+        // =====================================================
+        // INSERT REMAINING ROWS
+        // =====================================================
 
-        jdbcClient.sql("""
-            CREATE TABLE IF NOT EXISTS network_metrics(
-                id SERIAL PRIMARY KEY,
-                "timestamp" VARCHAR(100),
-                region_id VARCHAR(100),
-                cell_id VARCHAR(100),
-                avg_latency_ms NUMERIC,
-                download_speed_mbps NUMERIC,
-                upload_speed_mbps NUMERIC,
-                packet_loss_pct NUMERIC,
-                active_users INTEGER
-            )
-        """).update();
-    }
+        if (!batchArgs.isEmpty()) {
 
-    private BigDecimal num(String val) {
-        if (val == null) return BigDecimal.ZERO;
+            jdbcTemplate.batchUpdate(
+                    sql,
+                    batchArgs
+            );
 
-        String cleaned = val.replaceAll("[^0-9.]", "");
+            success += batchArgs.size();
+        }
 
-        if (cleaned.isBlank()) return BigDecimal.ZERO;
+        long end = System.currentTimeMillis();
 
-        return new BigDecimal(cleaned);
-    }
+        // =====================================================
+        // FINAL LOGS
+        // =====================================================
 
-    private Integer integer(String val) {
-        if (val == null) return 0;
-
-        String cleaned = val.replaceAll("[^0-9]", "");
-
-        if (cleaned.isBlank()) return 0;
-
-        return Integer.parseInt(cleaned);
+        log.info("=================================");
+        log.info("DATASET INGESTION COMPLETED");
+        log.info("TOTAL INSERTED : {}", success);
+        log.info("TOTAL FAILED   : {}", failed);
+        log.info(
+                "TIME TAKEN     : {} seconds",
+                (end - start) / 1000
+        );
+        log.info("=================================");
     }
 }
